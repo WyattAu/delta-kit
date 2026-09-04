@@ -1,0 +1,23 @@
+[package]
+name = "delta-kit"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.85"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/WyattAu/delta-kit"
+description = "Binary delta codec: Rabin rolling-hash copy/insert opcodes, prefix/suffix fast-path, XOR+Zstd binary mode, binary-safe."
+readme = "README.md"
+keywords = ["delta", "diff", "binary-diff", "codec", "rolling-hash"]
+categories = ["data-structures", "compression"]
+
+[dependencies]
+blake3 = "1.8"
+thiserror = "2.0"
+zstd = { version = "0.13", optional = true }
+
+[dev-dependencies]
+proptest = "1.6"
+
+[features]
+default = ["zstd"]
+zstd = ["dep:zstd"]
