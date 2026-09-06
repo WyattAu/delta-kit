@@ -78,6 +78,9 @@
 
 #![forbid(unsafe_code)]
 #![deny(missing_docs)]
+#![cfg_attr(not(feature = "std"), no_std)]
+
+extern crate alloc;
 
 mod delta;
 

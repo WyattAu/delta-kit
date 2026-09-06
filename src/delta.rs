@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: MIT OR Apache-2.0
 //! Delta codec implementation. See the crate root for the wire format.
 
-use std::collections::HashMap;
+use alloc::string::String;
+use alloc::vec;
+use alloc::vec::Vec;
 
+use hashbrown::HashMap;
 use thiserror::Error;
 
 /// Block size used by the Rabin rolling-hash strategy (4 KiB).
@@ -32,8 +35,8 @@ pub enum MismatchSide {
     Result,
 }
 
-impl std::fmt::Display for MismatchSide {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl core::fmt::Display for MismatchSide {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         f.write_str(match self {
             MismatchSide::Target => "target",
             MismatchSide::Base => "base",
@@ -173,7 +176,7 @@ fn strong_hash(data: &[u8]) -> u64 {
 }
 
 fn is_likely_binary(data: &[u8]) -> bool {
-    let window = std::cmp::min(data.len(), BINARY_CHECK_WINDOW);
+    let window = core::cmp::min(data.len(), BINARY_CHECK_WINDOW);
     data[..window].contains(&0u8)
 }
 

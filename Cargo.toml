@@ -11,8 +11,11 @@ keywords = ["delta", "diff", "binary-diff", "codec", "rolling-hash"]
 categories = ["data-structures", "compression"]
 
 [dependencies]
-blake3 = "1.8"
-thiserror = "2.0"
+blake3 = { version = "1.8", default-features = false }
+thiserror = { version = "2.0", default-features = false }
+# no_std HashMap: alloc has no HashMap (needs std RandomState); hashbrown
+# with default-hasher provides the std-compatible SipHash variant.
+hashbrown = { version = "0.17", default-features = false, features = ["default-hasher"] }
 zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
@@ -20,4 +23,7 @@ proptest = "1.6"
 
 [features]
 default = ["zstd"]
-zstd = ["dep:zstd"]
+# Core-only build: rolling-hash + apply paths need only `alloc`.
+std = []
+# zstd compression is std-bound; implies `std`.
+zstd = ["dep:zstd", "std"]
