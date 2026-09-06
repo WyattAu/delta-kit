@@ -13,3 +13,4 @@ jobs:
       loom: false
       wasm: false
       miri: true
+      embedded: true
