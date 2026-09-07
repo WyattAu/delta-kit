@@ -62,7 +62,9 @@
 //! returning an empty vector on checksum mismatch). This codec returns
 //! [`DeltaError`] for those cases instead. Well-formed deltas — including
 //! everything `compute_delta` produces — decode identically, and the
-//! opcode stream is byte-for-byte the same.
+//! opcode stream is byte-for-byte the same. Consumers that must preserve
+//! the origin's observable lenient behavior can delegate to
+//! [`apply_delta_lenient`] instead.
 //!
 //! # Example
 //!
@@ -84,5 +86,8 @@ extern crate alloc;
 
 mod delta;
 
-pub use delta::{apply_delta, compute_delta, BLOCK_SIZE};
+#[cfg(feature = "zstd")]
+pub use delta::compute_binary_delta;
+pub use delta::BLOCK_SIZE;
+pub use delta::{apply_delta, apply_delta_lenient, compute_delta};
 pub use delta::{DeltaError, MismatchSide};

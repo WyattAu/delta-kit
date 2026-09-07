@@ -20,6 +20,12 @@ with decoding hardened from silent fallbacks to proper errors.
 
 `apply_delta(base, delta)` reconstructs the target.
 
+For consumers that must preserve the origin `suture-protocol` contract
+(infallible `apply_delta -> Vec<u8>` with silent repair of malformed
+deltas), `apply_delta_lenient` provides exactly those legacy semantics.
+`compute_binary_delta(base, target)` exposes the `0x03` XOR+Zstd
+strategy directly (`zstd` feature).
+
 ## Usage
 
 ```rust
@@ -61,7 +67,9 @@ checksum failures returned an empty vector. This crate returns
 `InvalidInstruction`, `CopyOutOfRange`, `InsertOutOfRange`,
 `TargetLengthMismatch`, `ChecksumMismatch`). Well-formed deltas decode
 identically, and compatibility is verified byte-for-byte against the
-origin implementation across all four encodings.
+origin implementation across all four encodings; the lenient variant
+`apply_delta_lenient` is regression-tested against the origin's
+malformed-input behaviors.
 
 ## Cargo features
 

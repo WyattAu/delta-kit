@@ -195,8 +195,14 @@ fn xor_streams(base: &[u8], target: &[u8]) -> Vec<u8> {
     xor_data
 }
 
+/// Compute a `0x03` binary XOR+Zstd delta directly, bypassing the
+/// binary-sniffing gate of [`compute_delta`].
+///
+/// Returns `None` when the compressed XOR stream is not smaller than the
+/// target itself. Requires the `zstd` feature.
 #[cfg(feature = "zstd")]
-fn compute_binary_delta(base: &[u8], target: &[u8]) -> Option<Vec<u8>> {
+#[must_use]
+pub fn compute_binary_delta(base: &[u8], target: &[u8]) -> Option<Vec<u8>> {
     let base_hash = blake3::hash(base);
     let target_hash = blake3::hash(target);
 
@@ -649,6 +655,169 @@ pub fn apply_delta(base: &[u8], delta: &[u8]) -> Result<Vec<u8>, DeltaError> {
     }
 }
 
+/// Read a little-endian `u64` at `at`, yielding `0` when out of bounds.
+/// Mirrors the origin decoder's `try_into().unwrap_or([0; 8])` fallback.
+fn read_u64_or_zero(delta: &[u8], at: usize) -> u64 {
+    let mut bytes = [0u8; 8];
+    if let Some(slice) = delta.get(at..at.saturating_add(8)) {
+        if slice.len() == 8 {
+            bytes.copy_from_slice(slice);
+        }
+    }
+    u64::from_le_bytes(bytes)
+}
+
+/// Read a little-endian `u32` at `at`, yielding `0` when out of bounds.
+fn read_u32_or_zero(delta: &[u8], at: usize) -> u32 {
+    let mut bytes = [0u8; 4];
+    if let Some(slice) = delta.get(at..at.saturating_add(4)) {
+        if slice.len() == 4 {
+            bytes.copy_from_slice(slice);
+        }
+    }
+    u32::from_le_bytes(bytes)
+}
+
+/// Apply `delta` to `base` with the origin `suture-protocol` semantics.
+///
+/// This is a behavior-preserving port of the pre-extraction decoder:
+/// malformed input is silently repaired instead of rejected. For
+/// consumers whose public contract is the origin's infallible
+/// `apply_delta(base, delta) -> Vec<u8>`, this is the drop-in delegate.
+///
+/// Origin-observed behavior, reproduced exactly:
+///
+/// - an empty delta decodes to an empty vector;
+/// - an unknown top-level opcode, a truncated header, or a failed Zstd
+///   frame decode passes the delta bytes through unchanged;
+/// - a `0x02` stream stops at the first truncated or unknown
+///   instruction and returns the partial reconstruction; out-of-range
+///   `Copy` records and past-the-end `Insert` records are skipped;
+/// - a `0x03` base or target checksum mismatch returns an empty vector;
+/// - declared lengths are never validated (a length is only used as an
+///   allocation hint, capped against attacker-controlled values).
+///
+/// On well-formed deltas — everything [`compute_delta`] produces — this
+/// agrees byte-for-byte with [`apply_delta`]. New code should prefer
+/// [`apply_delta`].
+#[must_use]
+pub fn apply_delta_lenient(base: &[u8], delta: &[u8]) -> Vec<u8> {
+    let Some((&opcode, rest)) = delta.split_first() else {
+        return Vec::new();
+    };
+
+    match opcode {
+        OP_FULL => rest.to_vec(),
+
+        OP_PREFIX_SUFFIX => {
+            if delta.len() < 25 {
+                return delta.to_vec();
+            }
+            let prefix_len = read_u64_or_zero(delta, 1) as usize;
+            let suffix_len = read_u64_or_zero(delta, 9) as usize;
+            let total_len = read_u64_or_zero(delta, 17) as usize;
+            let changed = &delta[25..];
+
+            let prefix_take = prefix_len.min(base.len());
+            let mut result = Vec::with_capacity(
+                total_len.min(prefix_take + changed.len() + base.len().min(suffix_len)),
+            );
+            result.extend_from_slice(&base[..prefix_take]);
+            result.extend_from_slice(changed);
+            result.extend_from_slice(&base[base.len().saturating_sub(suffix_len)..]);
+            result
+        }
+
+        OP_INSTRUCTIONS => {
+            if delta.len() < 13 {
+                return delta.to_vec();
+            }
+            let target_len = read_u64_or_zero(delta, 1) as usize;
+            let num_instr = read_u32_or_zero(delta, 9) as usize;
+            let mut result = Vec::with_capacity(target_len.min(delta.len() + base.len()));
+            let mut offset = 13usize;
+
+            for _ in 0..num_instr {
+                if offset >= delta.len() {
+                    break;
+                }
+                match delta[offset] {
+                    INSTR_COPY => {
+                        if offset + 13 > delta.len() {
+                            break;
+                        }
+                        let base_offset = read_u64_or_zero(delta, offset + 1) as usize;
+                        let length = read_u32_or_zero(delta, offset + 9) as usize;
+                        let end = base_offset.saturating_add(length);
+                        if end <= base.len() {
+                            result.extend_from_slice(&base[base_offset..end]);
+                        }
+                        offset += 13;
+                    }
+                    INSTR_INSERT => {
+                        if offset + 5 > delta.len() {
+                            break;
+                        }
+                        let length = read_u32_or_zero(delta, offset + 1) as usize;
+                        let data_end = offset.saturating_add(5).saturating_add(length);
+                        if data_end <= delta.len() {
+                            result.extend_from_slice(&delta[offset + 5..data_end]);
+                            offset = data_end;
+                        }
+                    }
+                    _ => break,
+                }
+            }
+
+            result
+        }
+
+        OP_BINARY_XOR => {
+            #[cfg(feature = "zstd")]
+            {
+                if delta.len() < 41 {
+                    return delta.to_vec();
+                }
+                let base_checksum = &delta[9..25];
+                let target_checksum = &delta[25..41];
+                let compressed = &delta[41..];
+
+                let base_hash = blake3::hash(base);
+                if base_hash.as_bytes()[..16] != *base_checksum {
+                    return Vec::new();
+                }
+
+                let Ok(xor_data) = zstd::decode_all(compressed) else {
+                    return delta.to_vec();
+                };
+
+                let mut result = Vec::with_capacity(base.len().max(xor_data.len()));
+                let min_len = base.len().min(xor_data.len());
+                for i in 0..min_len {
+                    result.push(base[i] ^ xor_data[i]);
+                }
+                if xor_data.len() > base.len() {
+                    result.extend_from_slice(&xor_data[base.len()..]);
+                }
+
+                let result_hash = blake3::hash(&result);
+                if result_hash.as_bytes()[..16] != *target_checksum {
+                    return Vec::new();
+                }
+
+                result
+            }
+
+            #[cfg(not(feature = "zstd"))]
+            {
+                delta.to_vec()
+            }
+        }
+
+        _ => delta.to_vec(),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -902,5 +1071,124 @@ mod tests {
         let (_c, delta) = compute_delta(b"", b"");
         // Empty target: changed (0) < target (0) is false -> full.
         assert_eq!(delta, vec![OP_FULL]);
+    }
+
+    // === Lenient (origin-compatible) decode behavior ===
+
+    #[test]
+    fn test_lenient_empty_delta_returns_empty() {
+        assert_eq!(apply_delta_lenient(b"abc", &[]), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_lenient_unknown_opcode_echoes_delta() {
+        assert_eq!(
+            apply_delta_lenient(b"abc", &[0x7F, 1, 2, 3]),
+            vec![0x7F, 1, 2, 3]
+        );
+    }
+
+    #[test]
+    fn test_lenient_truncated_prefix_suffix_echoes_delta() {
+        let short01 = vec![OP_PREFIX_SUFFIX; 10];
+        assert_eq!(apply_delta_lenient(b"abc", &short01), short01);
+    }
+
+    #[test]
+    fn test_lenient_skips_out_of_range_copy() {
+        let mut d = vec![OP_INSTRUCTIONS];
+        d.extend_from_slice(&5u64.to_le_bytes()); // target_len
+        d.extend_from_slice(&1u32.to_le_bytes()); // one instruction
+        d.push(INSTR_COPY);
+        d.extend_from_slice(&1_000u64.to_le_bytes()); // beyond base
+        d.extend_from_slice(&2u32.to_le_bytes());
+        assert_eq!(apply_delta_lenient(b"abc", &d), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_lenient_skips_insert_past_end() {
+        let mut d = vec![OP_INSTRUCTIONS];
+        d.extend_from_slice(&8u64.to_le_bytes());
+        d.extend_from_slice(&1u32.to_le_bytes());
+        d.push(INSTR_INSERT);
+        d.extend_from_slice(&100u32.to_le_bytes()); // claims 100, provides 0
+        assert_eq!(apply_delta_lenient(b"abc", &d), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_lenient_returns_partial_on_unknown_instruction() {
+        let mut d = vec![OP_INSTRUCTIONS];
+        d.extend_from_slice(&4u64.to_le_bytes()); // target_len
+        d.extend_from_slice(&2u32.to_le_bytes()); // two instructions
+        d.push(INSTR_COPY);
+        d.extend_from_slice(&0u64.to_le_bytes());
+        d.extend_from_slice(&4u32.to_le_bytes()); // copies "abcd"
+        d.push(0x42); // unknown: stop, keep partial result
+        assert_eq!(apply_delta_lenient(b"abcd", &d), b"abcd".to_vec());
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn test_lenient_checksum_mismatch_returns_empty() {
+        let base = vec![0u8; 4096];
+        let mut target = vec![0u8; 4096];
+        target[100] = 0xAB;
+        let (_c, mut delta) = compute_delta(&base, &target);
+        assert_eq!(delta[0], OP_BINARY_XOR);
+        delta[9] ^= 0xFF; // corrupt the base checksum
+        assert_eq!(apply_delta_lenient(&base, &delta), Vec::<u8>::new());
+    }
+
+    #[test]
+    fn test_lenient_agrees_with_strict_on_computed_deltas() -> TestResult {
+        let cases: Vec<(Vec<u8>, Vec<u8>)> = vec![
+            (b"Hello, World!".to_vec(), b"Hello, Rust!".to_vec()),
+            (b"keep me".to_vec(), b"keep me too".to_vec()),
+            (vec![0u8; 4], vec![1, 2, 3]),
+            (
+                (0..3 * BLOCK_SIZE).map(|i| b'A' + (i % 26) as u8).collect(),
+                {
+                    let mut t = (0..3 * BLOCK_SIZE)
+                        .map(|i| b'A' + (i % 26) as u8)
+                        .collect::<Vec<_>>();
+                    t.splice(100..110, b"XX".to_vec());
+                    t
+                },
+            ),
+        ];
+        for (base, target) in &cases {
+            let (_c, delta) = compute_delta(base, target);
+            assert_eq!(
+                apply_delta_lenient(base, &delta),
+                apply_delta(base, &delta)?,
+                "lenient and strict must agree on compute_delta output"
+            );
+        }
+        Ok(())
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn test_lenient_binary_roundtrip() -> TestResult {
+        let base = vec![0u8; 8192];
+        let mut target = vec![0u8; 8192];
+        target[100] = 0xAB;
+        let last = target.len() - 1;
+        target[last] = 0xCD;
+        let (_c, delta) = compute_delta(&base, &target);
+        assert_eq!(delta[0], OP_BINARY_XOR);
+        assert_eq!(apply_delta_lenient(&base, &delta), target);
+        assert_eq!(apply_delta(&base, &delta)?, target);
+        Ok(())
+    }
+
+    #[cfg(feature = "zstd")]
+    #[test]
+    fn test_compute_binary_delta_public_surface() {
+        let data: Vec<u8> = (0..8192).map(|i| (i % 251) as u8).collect();
+        let delta = compute_binary_delta(&data, &data).expect("identical inputs compress");
+        assert_eq!(delta[0], OP_BINARY_XOR);
+        assert!(delta.len() < 100, "identical inputs must compress tiny");
+        assert_eq!(apply_delta_lenient(&data, &delta), data);
     }
 }
