@@ -9,6 +9,7 @@ description = "Binary delta codec: Rabin rolling-hash copy/insert opcodes, prefi
 readme = "README.md"
 keywords = ["delta", "diff", "binary-diff", "codec", "rolling-hash"]
 categories = ["data-structures", "compression"]
+exclude = ["/target"]
 
 [dependencies]
 blake3 = { version = "1.8", default-features = false }
@@ -33,3 +34,7 @@ default = ["zstd"]
 std = []
 # zstd compression is std-bound; implies `std`.
 zstd = ["dep:zstd", "std"]
+
+[lints.clippy]
+unwrap_used = "warn"
+expect_used = "warn"
