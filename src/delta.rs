@@ -413,6 +413,7 @@ fn read_u64_le(delta: &[u8], at: usize, opcode: u8) -> Result<u64, DeltaError> {
             got: delta.len(),
         })?;
     // INVARIANT (documented-infallible): `end - at == 8` by construction.
+    #[allow(clippy::expect_used)]
     let bytes =
         <[u8; 8]>::try_from(&delta[at..end]).expect("slice length is exactly 8 by construction");
     Ok(u64::from_le_bytes(bytes))
@@ -429,6 +430,7 @@ fn read_u32_le(delta: &[u8], at: usize, opcode: u8) -> Result<u32, DeltaError> {
             got: delta.len(),
         })?;
     // INVARIANT (documented-infallible): `end - at == 4` by construction.
+    #[allow(clippy::expect_used)]
     let bytes =
         <[u8; 4]>::try_from(&delta[at..end]).expect("slice length is exactly 4 by construction");
     Ok(u32::from_le_bytes(bytes))

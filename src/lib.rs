@@ -79,6 +79,7 @@
 //! ```
 
 #![forbid(unsafe_code)]
+#![cfg_attr(test, allow(clippy::unwrap_used, clippy::expect_used))] // tests assert invariants directly
 #![deny(missing_docs)]
 #![cfg_attr(not(feature = "std"), no_std)]
 
