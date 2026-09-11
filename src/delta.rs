@@ -14,6 +14,7 @@ pub const BLOCK_SIZE: usize = 4096;
 const RABIN_BASE: u64 = 257;
 const MERSENNE61: u64 = (1u64 << 61) - 1;
 
+#[cfg(feature = "zstd")]
 const BINARY_CHECK_WINDOW: usize = 8192;
 
 const OP_FULL: u8 = 0x00;
@@ -175,6 +176,7 @@ fn strong_hash(data: &[u8]) -> u64 {
     h
 }
 
+#[cfg(feature = "zstd")]
 fn is_likely_binary(data: &[u8]) -> bool {
     let window = core::cmp::min(data.len(), BINARY_CHECK_WINDOW);
     data[..window].contains(&0u8)
@@ -820,7 +822,7 @@ pub fn apply_delta_lenient(base: &[u8], delta: &[u8]) -> Vec<u8> {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, feature = "std"))]
 mod tests {
     use super::*;
 

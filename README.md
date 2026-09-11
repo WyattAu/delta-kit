@@ -1,5 +1,9 @@
 # delta-kit
 
+[![docs.rs](https://docs.rs/delta-kit/badge.svg)](https://docs.rs/delta-kit)
+[![crates.io](https://img.shields.io/crates/v/delta-kit.svg)](https://crates.io/crates/delta-kit)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE)
+
 A binary-safe delta codec for Rust: compute a compact delta between two
 byte strings and apply it to reconstruct the target. Byte-compatible wire
 format with the `suture-protocol` crate it was extracted from.
