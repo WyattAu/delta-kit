@@ -1,6 +1,6 @@
 [package]
 name = "delta-kit"
-version = "0.2.0"
+version = "0.2.1"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -22,9 +22,17 @@ zstd = { version = "0.13", optional = true }
 [dev-dependencies]
 proptest = "1.6"
 criterion = { version = "0.5" }
+iai-callgrind = "0.16"
 
 [[bench]]
 name = "delta_bench"
+harness = false
+required-features = ["std"]
+
+# Deterministic CI perf gate (instruction counts under valgrind). Not run
+# locally unless valgrind is installed; see benches/iai_delta.rs.
+[[bench]]
+name = "iai_delta"
 harness = false
 required-features = ["std"]
 

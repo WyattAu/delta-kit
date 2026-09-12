@@ -81,12 +81,44 @@ malformed-input behaviors.
 |---------|---------|--------|
 | `zstd`  | yes     | Enables the `0x03` binary XOR+Zstd strategy. Without it, `0x03` deltas fail to decode (`ZstdDisabled`) and are never produced. |
 
+## Benchmarks
+
+`benches/delta_bench.rs` (criterion) trends the rolling-hash encode path on
+representative 64 KiB edits; `benches/iai_delta.rs`
+([iai-callgrind](https://github.com/iai-callgrind/iai-callgrind)) is the
+deterministic instruction-count regression gate for the encode and apply hot
+loops (CI-only; requires valgrind).
+
+Indicative numbers from a development machine (x86-64, idle):
+
+| Bench | Result |
+|---|---|
+| `delta_text_edit_64k` (1 KiB changed mid-file) | ~390 µs |
+| `delta_binary_edit_64k` (1 KiB changed, binary-ish base) | ~114 µs |
+| `delta_append_64k` (2 KiB appended) | ~113 µs |
+
+The apply path's heap behavior is pinned by
+`tests/alloc_bounds.rs`: applying a delta allocates O(1) buffers bounded by
+the declared `target_len`, independent of the instruction count.
+
+Every claim in this README is mapped to its proof artifact in
+[CLAIMS.md](CLAIMS.md).
+
+```text
+cargo bench --bench delta_bench   # wall-clock trend
+cargo bench --bench iai_delta --no-run  # compile the instruction gate anywhere
+```
+
 ## Testing
 
 - 32 tests: unit (strategy coverage, hardened-decode errors), golden
   wire-format bytes, and property-based tests (arbitrary-bytes roundtrip,
   binary safety with forced zeros, universal size bound, similar-input
   bound, delta-of-delta composition).
+- `tests/alloc_bounds.rs`: counting-allocator proof that the apply path
+  stays within O(1) buffer allocations regardless of instruction count.
+- `benches/iai_delta.rs`: iai-callgrind instruction-count gate for the
+  encode/apply hot loops (CI-only; requires valgrind).
 - `cargo check --no-default-features` verified.
 - `cargo clippy -D warnings` and `cargo fmt --check` clean.
 

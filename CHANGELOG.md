@@ -5,6 +5,28 @@ Changelog](https://keepachangelog.com/) — versions follow [semver](https://sem
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-09-12
+
+### Added
+
+- Perf-claims proof-back pass: `CLAIMS.md` maps every README/docs claim to
+  its proof artifact (12 backed + 2 code-backed, 1 newly proven, 0 removed).
+- `benches/iai_delta.rs`: iai-callgrind instruction-count regression gate
+  for the hot loops — `encode_rolling` (block-index build + rolling-window
+  scan over a 128 KiB similar pair) and `apply_rolling` (Copy/Insert
+  reconstruction). CI-only execution (needs valgrind); compiles everywhere.
+- `tests/alloc_bounds.rs`: counting-global-allocator proof that
+  `apply_delta` / `apply_delta_lenient` allocate O(1) buffers bounded by
+  the declared `target_len`, independent of the instruction count (10k-
+  and 40k-instruction deltas share the same ≤8-allocation budget) —
+  turning REQ-DK-100's "never over-allocates beyond declared limits"
+  clause into a verified invariant on every `cargo test` run.
+
+### Changed
+
+- README: new "Benchmarks" section quoting the measured baseline, the
+  instruction gate, and the alloc bound; links `CLAIMS.md`. No API changes.
+
 ## [0.2.0] - 2026-09-07
 
 ### Added
