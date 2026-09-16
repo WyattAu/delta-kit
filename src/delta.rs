@@ -824,6 +824,13 @@ pub fn apply_delta_lenient(base: &[u8], delta: &[u8]) -> Vec<u8> {
 
 #[cfg(all(test, feature = "std"))]
 mod tests {
+    // Miri cannot execute foreign (C) functions, so every test that reaches
+    // into zstd's FFI boundary (`ZSTD_createCCtx` and friends, via the
+    // binary-xor delta path) is ignored under miri. delta-kit itself is
+    // `#![forbid(unsafe_code)]`; the excluded surface is pure FFI delegation
+    // in the zstd crate, and the rest of the crate (opcode parsing,
+    // copy/insert instructions, checksums, truncation/lenient error paths)
+    // is still exercised by the miri suite.
     use super::*;
 
     /// All fallible steps in tests use `?`; the crate keeps a strict
@@ -863,6 +870,9 @@ mod tests {
     // === Strategy coverage ===
 
     #[cfg(feature = "zstd")]
+    // Compresses/decompresses via C-zstd (`ZSTD_createCCtx`), which miri
+    // cannot execute; see the module comment.
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn test_binary_delta_roundtrip() -> TestResult {
         // Zero bytes trip is_likely_binary -> XOR+Zstd (0x03) path.
@@ -905,6 +915,11 @@ mod tests {
     }
 
     #[test]
+    // `compute_delta` probes the C-zstd binary path before falling back to
+    // 0x00 full content; the probe itself reaches FFI that miri cannot
+    // execute, even though the assertion only observes the fallback. See
+    // the module comment.
+    #[cfg_attr(miri, ignore)]
     fn test_full_opcode_fallback() -> TestResult {
         // Completely different, tiny, binary -> 0x00 full content.
         let base = vec![0u8; 4];
@@ -1030,6 +1045,9 @@ mod tests {
     }
 
     #[cfg(feature = "zstd")]
+    // `encode_all` reaches C-zstd, which miri cannot execute; see the
+    // module comment.
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn test_apply_binary_checksum_mismatch_is_error() -> TestResult {
         // Craft a valid-looking 0x03 whose base checksum won't match.
@@ -1049,6 +1067,9 @@ mod tests {
     }
 
     #[cfg(feature = "zstd")]
+    // Compresses/decompresses via C-zstd on the 4096-byte binary path,
+    // which miri cannot execute; see the module comment.
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn test_binary_delta_tamper_is_error() -> TestResult {
         let base = vec![0u8; 4096];
@@ -1132,6 +1153,9 @@ mod tests {
     }
 
     #[cfg(feature = "zstd")]
+    // `compute_delta` takes the C-zstd binary path on 4096-byte inputs,
+    // which miri cannot execute; see the module comment.
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn test_lenient_checksum_mismatch_returns_empty() {
         let base = vec![0u8; 4096];
@@ -1144,6 +1168,9 @@ mod tests {
     }
 
     #[test]
+    // The 3*BLOCK_SIZE case routes `compute_delta` through the C-zstd
+    // binary-xor path, which miri cannot execute; see the module comment.
+    #[cfg_attr(miri, ignore)]
     fn test_lenient_agrees_with_strict_on_computed_deltas() -> TestResult {
         let cases: Vec<(Vec<u8>, Vec<u8>)> = vec![
             (b"Hello, World!".to_vec(), b"Hello, Rust!".to_vec()),
@@ -1172,6 +1199,9 @@ mod tests {
     }
 
     #[cfg(feature = "zstd")]
+    // Compresses/decompresses via C-zstd on the 8192-byte binary path,
+    // which miri cannot execute; see the module comment.
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn test_lenient_binary_roundtrip() -> TestResult {
         let base = vec![0u8; 8192];
@@ -1187,6 +1217,9 @@ mod tests {
     }
 
     #[cfg(feature = "zstd")]
+    // `compute_binary_delta`/`apply_delta_lenient` reach C-zstd, which
+    // miri cannot execute; see the module comment.
+    #[cfg_attr(miri, ignore)]
     #[test]
     fn test_compute_binary_delta_public_surface() {
         let data: Vec<u8> = (0..8192).map(|i| (i % 251) as u8).collect();

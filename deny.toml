@@ -7,6 +7,17 @@ all-features = true
 [advisories]
 version = 2
 yanked = "deny"
+ignore = [
+    # bincode 1.x unmaintained (not a vulnerability). Dev-only: transitive via
+    # iai-callgrind (bench framework); absent from every runtime graph. No
+    # in-range fix; bincode 2 is semver-incompatible upstream.
+    # TODO: drop when iai-callgrind migrates to bincode 2.
+    "RUSTSEC-2025-0141",
+    # proc-macro-error2 unmaintained (not a vulnerability). Dev-only: via
+    # iai-callgrind-macros <- iai-callgrind. No safe upgrade available.
+    # TODO: drop when iai-callgrind migrates to a maintained diagnostics crate.
+    "RUSTSEC-2026-0173",
+]
 
 [licenses]
 version = 2
