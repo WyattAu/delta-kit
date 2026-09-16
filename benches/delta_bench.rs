@@ -1,7 +1,8 @@
 //! Hot-path benchmarks: rolling-delta compute on representative inputs.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use delta_kit::compute_delta;
+use std::hint::black_box;
 
 /// Simulates a text file edit: 64 KiB base, ~1 KiB changed in the middle.
 fn bench_text_edit(c: &mut Criterion) {
