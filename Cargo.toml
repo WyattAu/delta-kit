@@ -1,11 +1,11 @@
 [package]
 name = "delta-kit"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/WyattAu/delta-kit"
-description = "Binary delta codec: Rabin rolling-hash copy/insert opcodes, prefix/suffix fast-path, XOR+Zstd binary mode, binary-safe."
+description = "Binary delta codec: Rabin rolling-hash copy/insert opcodes, prefix/suffix fast-path, binary-safe. Extracted from Suture."
 readme = "README.md"
 keywords = ["delta", "diff", "binary-diff", "codec", "rolling-hash"]
 categories = ["data-structures", "compression"]
