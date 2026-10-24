@@ -21,7 +21,7 @@ zstd = { version = "0.13", optional = true }
 
 [dev-dependencies]
 proptest = "1.6"
-criterion = { version = "0.5" }
+criterion = { version = "0.8" }
 iai-callgrind = "0.16"
 
 [[bench]]
