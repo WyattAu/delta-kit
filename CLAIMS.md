@@ -1,4 +1,4 @@
-# delta-kit — claims inventory
+# delta-kit: claims inventory
 
 Every verifiable numeric / behavioral performance claim in README.md and the
 crate docs, mapped to its proof artifact. Generated as part of the
@@ -6,9 +6,9 @@ perf-claims proof-back pass (0.2.1).
 
 Status legend:
 
-- **backed** — an existing bench/test asserts the claim; linked below.
-- **proven** — unproven at survey time; a bench/test was added by this pass.
-- **code-backed** — enforced structurally in the code (checked by build, not
+- **backed**; an existing bench/test asserts the claim; linked below.
+- **proven**; unproven at survey time; a bench/test was added by this pass.
+- **code-backed**; enforced structurally in the code (checked by build, not
   by a runtime assertion).
 
 ## Correctness claims that bound the codec's behavior
@@ -64,8 +64,8 @@ Development machine, x86-64, 64 KiB inputs (`benches/delta_bench.rs`):
 
 New proof artifacts added in 0.2.1:
 
-- `benches/iai_delta.rs` — iai-callgrind instruction-count gate for the
+- `benches/iai_delta.rs`; iai-callgrind instruction-count gate for the
   rolling-hash encode loop and the Copy/Insert apply loop.
-- `tests/alloc_bounds.rs` — counting-allocator proof that `apply_delta` /
+- `tests/alloc_bounds.rs`; counting-allocator proof that `apply_delta` /
   `apply_delta_lenient` allocate O(1) buffers bounded by the declared
   `target_len`, independent of the instruction count.

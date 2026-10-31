@@ -1,9 +1,9 @@
-# Requirements — delta-kit
+# Requirements: delta-kit
 
 Numbered, testable requirements. Every requirement maps to at least one named
 test or doc-comment contract; security-relevant items cite THREAT-MODEL.md rows.
 
-Scope: Binary deltas — rolling-hash chunking with optional XOR+Zstd binary path
+Scope: Binary deltas; rolling-hash chunking with optional XOR+Zstd binary path
 
 ## Functional
 
